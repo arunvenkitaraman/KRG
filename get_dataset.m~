@@ -1,0 +1,346 @@
+%% Function to get the relevant datasets and the associated variables
+% Arun Venkitaraman 2018-01-01
+
+
+% D: Data matrix
+%L: graph-Laplacian
+%Ntrain: subset of indices of D corresponding to training set
+%Ntest: data indices corresponding to test data
+%m: size of graph
+%offset: offset of days to be used in the case of temperature data
+% city_ip: is the portion of the entrie data used for input (for example
+% some cities in the ETEX data)
+% city_op: is the portion of the entrie data used for output that lies over associated graph with Laplacian L 
+
+
+
+% The input varaible 'dataset, takes values
+%'temp' for Swedish temperature data
+% 'etex' for ETEX atmospheric tracer diffusion data
+% 'eeg' for EEG data
+% 'cere' for fMRI data of the cerebellum region
+%'barabasi' for Barabasi-Albert small-world graphs of default size m=10,
+% which may be changed below
+%'erdos' for Erdos-Renyi small-world graphs of default size m=10,
+% which may be changed below
+
+
+%The descritpiton of the associated datasets may be found in the links mentioned in our article
+% The datasets along with the partition o total data into training and test
+% set used in the article are prvided alongwith the code.
+
+
+
+% For the convenient generation of synthesized graph signal data based on small-world graphs, 
+% we have used the GSP box toolbox available at
+% https://epfl-lts2.github.io/gspbox-html/.
+% However, our codes do not use any other funclitonality from the
+% toolbox. The toolbox is not necessary for the algorithms to run
+% as long as the graph adjacency/Laplacian matrix of the graph can be specified
+
+
+function  [D,L,alpvec,betvec, Ntrain,Ntest,m,offset,city_ip,city_op,K,k]=get_dataset(dataset)
+switch dataset
+
+%% Temperature data
+    case 'temp'
+    
+    load('city45data.mat');
+    load('city45T.mat');
+    load('smhi_temp_17.mat');
+    load('smhi17_partition.mat');
+    T=[temp_17'];
+    alpvec=[0 logspace(-3,2,10)];
+    betvec=[logspace(-2,2,10)];
+    
+    
+    m=32;
+    city_ip=1:m;
+    city_op=1:m;
+    offset=1;  % The number of days offset between input and output temperatures
+    ns=92;
+    m=length(city_op);
+    
+    
+    
+    A=A45(1:m,1:m);
+    A=A.^2;
+    A=exp(-A/mean(A(:)));
+    A=A-diag(diag(A));
+    L=diag(sum(A,2))-A;
+    L=L;
+    
+    
+    T=T/max(abs(T(:)));
+    D=T';
+    K=0;
+    k=0;
+    %% Temperature as o/p and airpressure as i/p 2018
+      case 'temp2'
+    
+    load('city45data.mat');
+    load('city45T.mat');
+
+    load('smhi18.mat');
+    T=[smhi18_y'];
+    alpvec=[0 logspace(-4,4,10)];
+    betvec=[logspace(-2,2,10)];
+    
+    
+    m=32;
+    city_ip=1:m;
+    city_op=1:m;
+    offset=1;  % The number of days offset between input and output temperatures
+    ns=92;
+    m=length(city_op);
+    
+    
+    
+    A=A45(1:m,1:m);
+    A=A.^2;
+    A=exp(-A/mean(A(:)));
+    A=A-diag(diag(A));
+    L=diag(sum(A,2))-A;
+    L=L;
+    
+    
+    T=T/max(abs(T(:)));
+    D=T';
+    K=0;
+
+%% EEG data
+case 'eeg'
+    
+    load('eegdata_S006R01.mat');
+    %load('eegdata_S002R01.mat');
+    D=l(1:64,:)';
+    alpvec=[0 logspace(-2,2,10)];
+    betvec=[logspace(-2,3,10)];
+    %betvec=1;
+    La=length(alpvec);
+    Lb=length(betvec);
+    tic
+    %%
+    offset=0;
+    ntr=2000;
+    
+    Y_train=(D(1:ntr,:));
+    
+    Afull=pdist2(Y_train',Y_train').^2;
+    Afull=Afull/mean(Afull(:));
+    Afull=exp(-1*Afull);
+    Lfull=diag(sum(Afull,2))-Afull;
+    Lfull=Lfull/abs(max(eig(Lfull)));
+    
+    Afull=Afull-diag(diag(Afull));
+    dd=sum(Afull,2);
+    [vd,bd]=sort(dd,'descend');
+    
+    city_ip=1:4:64;
+    offset=0;
+    city_op=setdiff((1:64),city_ip);
+    m=length(city_op);
+    %%
+    %m=64;
+    %  offset=1;
+    %  city_op=1:m;
+    % city_ip=city_op;
+    A=pdist2(Y_train(:,city_op)',Y_train(:,city_op)').^2;
+    A=A/mean(A(:));
+    A=exp(-1*A);
+    A=A.*(A>.25);
+    A=A-diag(diag(A));
+    L=diag(sum(A,2))-A;
+    L=L/abs(max(eig(L)));
+    
+    m=length(city_op);
+    ns=160;
+    D=D(ntr:end,:);
+    T=D';
+    load('EEG_partition.mat')
+K=0;
+%% ETEX tracer diffusion data
+case 'etex'
+    
+    
+    load('etex_1.mat');
+    load('etex_2.mat');
+    load('A_etex.mat');
+    D=[pmch pmcp]';
+    T=D;
+    D=D-0*mean(D,1);
+    dol=max(abs(D), [], 2);
+    D = bsxfun(@rdivide, D, dol);
+    %D=normr(D);
+    %D=D(:,city_op);%
+    %D=D*diag(1./sqrt(diag(cov(D))));
+    
+    alpvec=[0 logspace(-1,3,10)];
+    %alpvec=1;
+    
+    betvec=[logspace(-1,1,10)];
+    %betvec=1;
+    La=length(alpvec);
+    Lb=length(betvec);
+    tic
+    %%
+    %
+    m=168;
+    
+    city_op=1:80;
+    city_ip=81:168;
+    offset=0;
+    ns=60;
+    m=length(city_op);
+    
+    
+    A=A(city_op,city_op);
+    A=A.^2;
+    A=A/mean(A(:));
+    A=exp(-A);
+    A=A-diag(diag(A));
+    L=diag(sum(A,2))-A;
+    L=L/abs(max(eig(L)));
+    
+    D=D(1:end,:);
+    T=D';
+    %T=pinv(eye(11)+0*L)*T;
+    
+    T=T/max(abs(T(:)));
+    Ntrain=randperm(ns,ns/2);
+    Ntest=setdiff(1:ns,Ntrain);
+    load('etex_partition.mat');
+    K=0;
+
+%% FMRI data from cerebellum
+case'cere'
+    
+    load('A_cerebellum.mat');
+    load('signal_set_cerebellum.mat');
+    T=F2;
+    
+    
+    alpvec=[0 logspace(-2,2,10)];
+    %alpvec=1;
+    
+    betvec=[logspace(-3,2,10)];
+    %betvec=1;
+    La=length(alpvec);
+    Lb=length(betvec);
+    tic
+    
+    
+    %%
+    m=50;
+    city_ip=1:10;
+    offset=0;
+    city_op=setdiff((1:m),city_ip);
+    
+    
+    m=length(city_op);
+    A=full(A(city_op,city_op));
+    L=diag(sum(A,2))-A;
+    ns=290;
+    
+    T0=T;
+    T=T/max(abs(T(:)));
+    D=T';
+    %Ntrain=randperm(ns,n);
+    %Ntest=setdiff(1:ns,Ntrain);
+    load('Cere_partition.mat');
+    K=0;
+
+
+
+%% Barabasi-Albert graph
+case 'barabasi'
+    m=10;% graph node size
+    n=256;
+    
+    
+    alpvec=logspace(-2,2,10);
+    betvec=logspace(-2,2,10);
+    
+    city_ip=1:m;
+    city_op=1:m;
+    offset=0;
+
+    G=gsp_barabasi_albert(m,5,5);
+    
+    % Getting the adjacency matrix
+    A=full(G.W);
+    L=full(G.L);
+   
+    % Generating Covariance matrix randomly from a Wishart distribution
+    
+  
+    K=wishrnd(eye(n),n);
+    
+    % Covariance for generating corelated entries acrros observatiosn
+  
+    GenSig=(kron(pinv(0+1*eye(m)),(K)));
+   
+    
+    % Generating tsingals with covariance K between observations for each
+    % node
+    D=mvnrnd(zeros(m*(n),1),GenSig);
+    D=reshape(D,n,m);
+    
+    
+ % Projecting onto graph-Laplacian space to get smooth graph signals:
+    % The variable 'lam'' rannging in (0,1) may be used to adjust the regularization of the graph
+    % smoothness in signal generatio
+    lam=.5;
+    D=D*pinv(lam*eye(m)+(1-lam)*L);
+    T=D';
+    
+        Ntrain=1:n/2;
+    Ntest=n/2:n;
+
+%% Erdos-ERenyi graph
+    case 'erdos'
+    m=10;% graph node size
+   n=256;
+    
+    alpvec=logspace(-2,2,10);
+    betvec=logspace(-2,2,10);
+    
+    city_ip=1:m;
+    city_op=1:m;
+    offset=0;
+    G=gsp_erdos_renyi(m,.5);
+  
+    
+    % Getting the adjacency matrix
+    A=full(G.W);
+    L=full(G.L);
+   
+    % Generating Covariance matrix randomly from a Wishart distribution
+    
+
+    K=wishrnd(eye(n),n);
+    
+    % Covariance for generating corelated entries acrros observatiosn
+
+    GenSig=(kron(pinv(0+1*eye(m)),(K)));
+ 
+    % Generating tsingals with covariance K between observations for each
+    % node
+    D=mvnrnd(zeros(m*(n),1),GenSig);
+    D=reshape(D,n,m);
+    
+    
+    % Projecting onto graph-Laplacian space to get smooth graph signals:
+    % The variable 'lam'' rannging in (0,1) may be used to adjust the regularization of the graph
+    % smoothness in signal generation
+    lam=.5;
+    D=D*pinv(lam*eye(m)+(1-lam)*L);
+    T=D';
+    
+        Ntrain=1:n/2;
+    Ntest=n/2+1:n;
+    K=K(Ntrain,Ntrain);
+    k=K(Ntrain,Ntest);
+    
+end
+ 
